@@ -1,157 +1,178 @@
-import json
-import urllib.request
+#!/usr/bin/env python3
+import requests
 import os
-import sys
-import subprocess
-import datetime
 import time
-import random
+import json
+import socket
+from datetime import datetime
 
-VERSION = "3.0 Shadow Animated"
+HISTORY_FILE = "ip_history.json"
 
-class IPLocatorShadow:
+colors = ["\033[91m", "\033[92m", "\033[93m", "\033[96m", "\033[95m"]
+RESET = "\033[0m"
 
-    def __init__(self):
-        self.colors = [
-            '\033[91m',  # Red
-            '\033[92m',  # Green
-            '\033[93m',  # Yellow
-            '\033[94m',  # Blue
-            '\033[95m',  # Magenta
-            '\033[96m',  # Cyan
-        ]
-        self.W = '\033[97m'
-        self.log_file = "ip_history.txt"
+def type_print(text, delay=0.005):
+    for char in text:
+        print(char, end="", flush=True)
+        time.sleep(delay)
+    print()
 
-    def clear(self):
-        os.system("clear")
-
-    def type_effect(self, text, speed=0.002):
-        for char in text:
-            sys.stdout.write(char)
-            sys.stdout.flush()
-            time.sleep(speed)
-        print()
-
-    def animated_banner(self):
-        self.clear()
-        banner = """
-
+def banner():
+    os.system("clear")
+    color = colors[int(time.time()) % len(colors)]
+    print(color + """
 ██████╗  █████╗ ██╗   ██╗ █████╗ ███╗   ██╗
 ██╔══██╗██╔══██╗╚██╗ ██╔╝██╔══██╗████╗  ██║
 ██████╔╝███████║ ╚████╔╝ ███████║██╔██╗ ██║
 ██╔══██╗██╔══██║  ╚██╔╝  ██╔══██║██║╚██╗██║
 ██║  ██║██║  ██║   ██║   ██║  ██║██║ ╚████║
 ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═══╝
+        ⟁ Rayan IP Shadow v4 ⟁
+""" + RESET)
 
-⟁ Rayan AlQahtani • Shadow Terminal ⟁
-IP Locator Pro Max — Version """ + VERSION + """
+def save_history(data):
+    history = []
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            history = json.load(f)
+    history.append(data)
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=4)
 
-System Status : ACTIVE
-Initializing Network Intelligence...
-"""
-        color = random.choice(self.colors)
-        self.type_effect(color + banner + self.W, 0.0008)
-
-    def fetch(self, target=""):
-        url = f"http://ip-api.com/json/{target}?fields=66846719"
-        try:
-            response = urllib.request.urlopen(url)
-            return json.load(response)
-        except:
-            print("\033[91m[!] Network Error\033[97m")
-            return None
-
-    def save_history(self, data):
-        with open(self.log_file, "a") as f:
-            f.write(f"\n[{datetime.datetime.now()}]\n")
-            for k, v in data.items():
-                f.write(f"{k}: {v}\n")
-            f.write("-" * 40)
-
-    def copy_clipboard(self, text):
-        try:
-            subprocess.run(["termux-clipboard-set", text])
-            print("\033[92m[✓] IP copied to clipboard\033[97m")
-        except:
-            print("\033[91m[!] Clipboard failed (Install termux-api)\033[97m")
-
-    def show(self, data):
-        if not data or data.get("status") != "success":
-            print("\033[91m[!] Invalid IP\033[97m")
-            return
-
-        print("\n━━━━━━━━ FULL IP DETAILS ━━━━━━━━\n")
-
+def generate_report(data):
+    filename = f"IP_Report_{data.get('IP')}.txt"
+    with open(filename, "w") as f:
+        f.write("=== Rayan IP Shadow Report ===\n\n")
         for k, v in data.items():
-            color = random.choice(self.colors)
-            print(color + f"{k.capitalize():15}: {v}" + self.W)
+            f.write(f"{k}: {v}\n")
+    print(f"\n📄 Report saved as {filename}")
 
-        map_link = f"https://www.google.com/maps/place/{data.get('lat')}+{data.get('lon')}"
-        print("\nGoogle Maps:", map_link)
+def copy_clipboard(text):
+    os.system(f'echo "{text}" | termux-clipboard-set')
+    print("📋 Copied to clipboard!")
 
-        print("\n━━━━━━━━ SECURITY ANALYSIS ━━━━━━━━\n")
-        if data.get("proxy"):
-            print("\033[91m[!] Proxy/VPN Detected\033[97m")
+def get_ip_data(ip):
+    try:
+        r = requests.get(f"https://ipwho.is/{ip}", timeout=5)
+        data = r.json()
+        if data.get("success"):
+            return data
+    except:
+        pass
+
+    try:
+        r = requests.get(f"https://ipinfo.io/{ip}/json", timeout=5)
+        return r.json()
+    except:
+        return None
+
+def display(data):
+    if not data:
+        print("❌ Failed to fetch data")
+        return
+
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+
+    if not lat and data.get("loc"):
+        loc_split = data.get("loc").split(",")
+        lat = float(loc_split[0])
+        lon = float(loc_split[1])
+
+    if lat and lon:
+        lat = round(float(lat), 6)
+        lon = round(float(lon), 6)
+        google_map = f"https://www.google.com/maps?q={lat},{lon}"
+    else:
+        google_map = None
+
+    fields = {
+        "IP": data.get("ip"),
+        "IP Version": data.get("type"),
+        "Continent": data.get("continent"),
+        "Country": data.get("country"),
+        "Region": data.get("region"),
+        "City": data.get("city"),
+        "Postal": data.get("postal"),
+        "Latitude": lat,
+        "Longitude": lon,
+        "Timezone": str(data.get("timezone")),
+        "ISP": data.get("isp"),
+        "Organization": data.get("org"),
+        "ASN": data.get("asn"),
+        "Currency": str(data.get("currency")),
+        "Connection Type": data.get("connection", {}).get("type") if isinstance(data.get("connection"), dict) else None,
+        "Proxy/VPN": data.get("proxy"),
+        "Hosting": data.get("hosting"),
+        "Google Maps": google_map
+    }
+
+    print("\n" + "="*60)
+    for key, value in fields.items():
+        if value:
+            print(f"{key}: {value}")
+    print("="*60)
+
+    save_history(fields)
+
+    while True:
+        print("""
+[1] Copy IP
+[2] Copy Google Maps Link
+[3] Open Google Maps
+[4] Generate Shareable Report
+[5] Back to Menu
+""")
+        choice = input("Select: ")
+
+        if choice == "1":
+            copy_clipboard(fields.get("IP"))
+
+        elif choice == "2" and google_map:
+            copy_clipboard(google_map)
+
+        elif choice == "3" and google_map:
+            os.system(f"termux-open '{google_map}'")
+
+        elif choice == "4":
+            generate_report(fields)
+
+        elif choice == "5":
+            break
+
         else:
-            print("\033[92m[✓] No Proxy Detected\033[97m")
+            print("Invalid option")
 
-        if data.get("hosting"):
-            print("\033[93m[!] Hosting/Datacenter IP\033[97m")
-        else:
-            print("\033[92m[✓] Residential IP Likely\033[97m")
-
-        self.copy_clipboard(data.get("query"))
-        self.save_history(data)
-
-    def my_ip(self):
-        data = self.fetch("")
-        self.show(data)
-
-    def other_ip(self):
-        target = input("\033[96mEnter IP or Domain: \033[97m")
-        if target.strip():
-            data = self.fetch(target)
-            self.show(data)
-
-    def view_history(self):
-        if not os.path.exists(self.log_file):
-            print("\033[91mNo History Found\033[97m")
-            return
-        with open(self.log_file, "r") as f:
-            print("\n━━━━━━━━ HISTORY ━━━━━━━━\n")
-            print(f.read())
-
-    def menu(self):
-        while True:
-            print("""
+def main():
+    while True:
+        banner()
+        print("""
 [1] Quick My IP
 [2] Lookup Other IP
-[3] View History
-[4] Clear Screen
-[5] Exit
+[3] Exit
 """)
-            choice = input("\033[96mSelect Option: \033[97m")
+        choice = input("Select Option: ")
 
-            if choice == "1":
-                self.my_ip()
-            elif choice == "2":
-                self.other_ip()
-            elif choice == "3":
-                self.view_history()
-            elif choice == "4":
-                self.animated_banner()
-            elif choice == "5":
-                print("\033[92mExiting Shadow Terminal...\033[97m")
-                sys.exit()
-            else:
-                print("\033[91mInvalid Option\033[97m")
+        if choice == "1":
+            data = get_ip_data("")
+            display(data)
 
-    def run(self):
-        self.animated_banner()
-        self.menu()
+        elif choice == "2":
+            ip = input("Enter IP or Domain: ")
+            try:
+                ip = socket.gethostbyname(ip)
+            except:
+                pass
+            data = get_ip_data(ip)
+            display(data)
 
+        elif choice == "3":
+            print("Goodbye 👋")
+            break
+
+        else:
+            print("Invalid option")
+            time.sleep(1)
 
 if __name__ == "__main__":
-    IPLocatorShadow().run()
-
+    main()
